@@ -41,6 +41,12 @@ def sync_cassandra():
 
   print 'All done!'
 
+def _truncate():
+  SUBSCRIBERS.truncate()
+  STREAMS.truncate()
+  ACTIVITIES.truncate()
+  COMMENTS.truncate()
+  LIKES.truncate()
 
 def subscribe(from_stream_id, to_stream_id):
   """
