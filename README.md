@@ -18,3 +18,9 @@ Some terminology was inspired by the Activity Streams format (http://activitystr
 So far very few lines of code, ~150 LOC.
 
 Work in progress!
+
+Todo
+
+  * Ranking
+  * Aggregation/roll-up (do client-side?)
+  * Ownership model (who owns an activity? Should it be duped instead for each stream?)
