@@ -65,10 +65,10 @@ def unsubscribe(from_stream_id, to_stream_id):
     return SUBSCRIBERS.remove(str(from_stream_id), [str(to_stream_id)])
 
 def get_subscribers(stream_id):
-  """
-  Get all subscribers for a given activity stream
-  Example: get_subscribers('elvis') will get the all users subscribing to user 'elvis' activity stream
-  """
+    """
+    Get all subscribers for a given activity stream
+    Example: get_subscribers('elvis') will get the all users subscribing to user 'elvis' activity stream
+    """
     try:
         return SUBSCRIBERS.get(str(stream_id)).keys()
     except NotFoundException:
@@ -90,7 +90,7 @@ def add_activity_to_stream(stream_id, actor, message):
     activity_entry = {ts: activity_id}
     rows = {str(stream_id): activity_entry}
     for sid in stream_ids:
-    rows[str(sid)] = activity_entry
+        rows[str(sid)] = activity_entry
 
     STREAMS.batch_insert(rows)
 
@@ -129,9 +129,9 @@ def get_commments(activity_id, limit):
 
     comments = []
     for ts, json_data in json_comments.iteritems():
-    c = json.loads(json_data)
-    c['published'] = ts
-    comments.append(c)
+        c = json.loads(json_data)
+        c['published'] = ts
+        comments.append(c)
 
     return comments
 
