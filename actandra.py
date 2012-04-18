@@ -3,6 +3,7 @@
 # Probably flawed in many ways like proper key usage, writing and features.
 
 import pycassa
+from pycassa.pool import ConnectionPool
 from pycassa.cassandra.ttypes import NotFoundException
 from pycassa.system_manager import *
 import datetime
@@ -11,13 +12,7 @@ import json
 import time
 
 KEYSPACE = 'Actandra'
-POOL = pycassa.connect(KEYSPACE)
 
-SUBSCRIBERS = pycassa.ColumnFamily(POOL, 'Subscribers')
-STREAMS = pycassa.ColumnFamily(POOL, 'Streams')
-ACTIVITIES = pycassa.ColumnFamily(POOL, 'Activities')
-COMMENTS = pycassa.ColumnFamily(POOL, 'Comments')
-LIKES = pycassa.ColumnFamily(POOL, 'Likes')
 
 def sync_cassandra():
     sys = SystemManager()
@@ -32,14 +27,22 @@ def sync_cassandra():
             return
         sys.drop_keyspace(KEYSPACE)
 
-    sys.create_keyspace(KEYSPACE, replication_factor=1)
+    sys.create_keyspace(KEYSPACE, SIMPLE_STRATEGY, {'replication_factor': '1'})
     sys.create_column_family(KEYSPACE, 'Subscribers', comparator_type=BYTES_TYPE)
     sys.create_column_family(KEYSPACE, 'Streams', comparator_type=LONG_TYPE)
     sys.create_column_family(KEYSPACE, 'Activities', comparator_type=BYTES_TYPE)
     sys.create_column_family(KEYSPACE, 'Comments', comparator_type=LONG_TYPE)
-    sys.create_column_family(KEYSPACE, 'Likes', comparator_type=LONG_TYPE)
+    sys.create_column_family(KEYSPACE, 'Likes', comparator_type=BYTES_TYPE)
 
     print 'All done!'
+#sync_cassandra()
+
+POOL = ConnectionPool(KEYSPACE)
+SUBSCRIBERS = pycassa.ColumnFamily(POOL, 'Subscribers')
+STREAMS = pycassa.ColumnFamily(POOL, 'Streams')
+ACTIVITIES = pycassa.ColumnFamily(POOL, 'Activities')
+COMMENTS = pycassa.ColumnFamily(POOL, 'Comments')
+LIKES = pycassa.ColumnFamily(POOL, 'Likes')
 
 def _truncate():
     SUBSCRIBERS.truncate()
@@ -83,7 +86,8 @@ def add_activity_to_stream(stream_id, actor, message):
     # TODO: Validate actor and message
 
     activity_id = str(uuid.uuid4())
-    ACTIVITIES.insert(str(activity_id), {'message': message, 'actor': json.dumps(actor), 'numComments': '0'})
+    # FIXME: Really include numComments and numLikes when they are 0? Add when used?
+    ACTIVITIES.insert(str(activity_id), {'message': message, 'actor': actor, 'numComments': '0', 'numLikes': '0'})
 
     stream_ids = get_subscribers(stream_id)
     ts = long(time.time() * 1e6)
@@ -93,6 +97,7 @@ def add_activity_to_stream(stream_id, actor, message):
         rows[str(sid)] = activity_entry
 
     STREAMS.batch_insert(rows)
+    return activity_id
 
 def remove_activity_from_stream(stream_id, activity_id):
     STREAMS.remove(str(stream_id), [str(activity_id)])
@@ -102,6 +107,12 @@ def remove_activity(activity_id):
     # Only use this when you know what you are doing
     ACTIVITIES.remove(str(activity_id))
 
+def get_activity(activity_id):
+    a = ACTIVITIES.get(activity_id)
+    if a:
+        a['numComments'] = int(a['numComments'])
+        a['numLikes'] = int(a['numLikes'])
+    return a
 
 def get_activity_stream(stream_id, limit):
     """
@@ -124,8 +135,8 @@ def add_comment(activity_id, actor, comment):
 def remove_comment(activity_id):
     COMMENTS.remove(str(activity_id))
 
-def get_commments(activity_id, limit):
-    json_comments = COMMENTS.get(str(activity_id), column_count=limit, column_reversed=True)
+def get_commments(activity_id, limit, latest_first=True):
+    json_comments = COMMENTS.get(str(activity_id), column_count=limit, column_reversed=latest_first)
 
     comments = []
     for ts, json_data in json_comments.iteritems():
@@ -135,12 +146,22 @@ def get_commments(activity_id, limit):
 
     return comments
 
-def add_like(activity_id, comment):
-    pass
+def add_like(activity_id, actor):
+    """Flag supplied actor as liking the activity"""
+    # TODO: Enforce caps on num likes
+    LIKES.insert(str(activity_id), {str(actor): '\0'})
+    num_likes = LIKES.get_count(str(activity_id))
+    ACTIVITIES.insert(str(activity_id), {'numLikes': str(num_likes)})
 
-def remove_like(activity_id):
-    pass
+def remove_like(activity_id, actor):
+    """Remove like made by actor on an activity"""
+    LIKES.remove(str(activity_id), [str(actor)])
+    num_likes = LIKES.get_count(str(activity_id))
+    ACTIVITIES.insert(str(activity_id), {'numLikes': str(num_likes)})
 
-def get_likes(activity_id, limit):
-    pass
-
+def get_likes(activity_id, limit=10):
+    """Get all actors that have liked a particular activity"""
+    try:
+        return LIKES.get(str(activity_id), column_count=limit).keys()
+    except NotFoundException:
+        return []
