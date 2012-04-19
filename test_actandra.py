@@ -1,12 +1,13 @@
-import random
 import unittest
 import actandra
+from utils import truncate
+
 a = actandra
 
 class TestActandra(unittest.TestCase):
 
     def setUp(self):
-        actandra._truncate()
+        truncate()
 
     def test_subscribe(self):
         self.assertEquals([], actandra.get_subscribers('elvis'))
