@@ -24,3 +24,5 @@ Todo
   * Ranking
   * Aggregation/roll-up (do client-side?)
   * Ownership model (who owns an activity? Should it be duped instead for each stream?)
+    What happens if two actors are involved in an activity and one actor deletes the activity?
+    Should it be deleted completely? Should it deleted from my stream only?
